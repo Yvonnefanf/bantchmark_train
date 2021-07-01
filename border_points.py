@@ -19,7 +19,7 @@ n_epochs = 500
 batch_size = 200
 learn_rate = 0.001
 
-save_location = "border_points"
+save_location = "border_points/diff=0.5"
 if not os.path.exists(save_location):
     os.makedirs(save_location)
 model_name = "resnet50"
@@ -42,7 +42,7 @@ transform = transforms.Compose(
 trainset = torchvision.datasets.CIFAR10(root='data', train=True,
                                         download=True, transform=transform)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=1,
-                                          shuffle=False, num_workers=2)
+                                          shuffle=True, num_workers=0)
 
 def adv_attack(image, epsilon, data_grad):
     # Collect the element-wise sign of the data gradient
@@ -55,9 +55,10 @@ def adv_attack(image, epsilon, data_grad):
 
     return perturbed_image
 
-for i in range(200):
+
+for n_epoch in range(0, 200, 5):
     # checkpoint_path = "models\\resnet50\\epoch={:03d}.ckpt".format(i)
-    checkpoint_path = "models/resnet50/epoch={:03d}.ckpt".format(i)
+    checkpoint_path = "models/resnet50/epoch={:03d}.ckpt".format(n_epoch)
     model = resnet.resnet50()
     checkpoint = torch.load(checkpoint_path, map_location=device)
     state_dict = checkpoint['state_dict']
@@ -101,12 +102,12 @@ for i in range(200):
             data.requires_grad = True
             j = j + 1
             if final_pred.item() != target:
-                if abs_dis < 1.5:
+                if abs_dis < 0.5:
                     adv_data[r] = adv_ex
                     adv_pred_labels[r] = final_pred.item()
                     r = r + 1
                 break
-            if abs_dis < 1.5:
+            if abs_dis < 0.5:
                 adv_data[r] = adv_ex
                 adv_pred_labels[r] = final_pred.item()
                 r = r + 1
@@ -125,10 +126,9 @@ for i in range(200):
     augmentation_data = input_X
     adv_pred_labels = adv_pred_labels[:r]
     t1 = time.time()
-    print(i, "{:.1f}".format(t1-t0))
+    print(n_epoch, "{:.1f}".format(t1-t0))
 
-    dataname = "data_{:03d}.npy".format(i)
-    labelname = "labels_{:03d}.npy".format(i)
+    dataname = "data_{:03d}.npy".format(n_epoch)
+    labelname = "labels_{:03d}.npy".format(n_epoch)
     np.save(os.path.join(save_location, dataname), augmentation_data)
     np.save(os.path.join(save_location, labelname), adv_pred_labels)
-

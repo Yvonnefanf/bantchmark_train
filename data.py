@@ -16,7 +16,7 @@ class CIFAR10Data(pl.LightningDataModule):
         self.mean = (0.4914, 0.4822, 0.4465)
         self.std = (0.2471, 0.2435, 0.2616)
 
-    def download_weights():
+    def download_weights(self):
         url = (
             "https://rutgers.box.com/shared/static/gkw08ecs797j2et1ksmbg1w5t3idf5r5.zip"
         )
@@ -54,6 +54,7 @@ class CIFAR10Data(pl.LightningDataModule):
                 T.Normalize(self.mean, self.std),
             ]
         )
+
         dataset = CIFAR10(root=self.hparams.data_dir, train=True, transform=transform, download=True)
         dataloader = DataLoader(
             dataset,
@@ -72,6 +73,7 @@ class CIFAR10Data(pl.LightningDataModule):
                 T.Normalize(self.mean, self.std),
             ]
         )
+
         dataset = CIFAR10(root=self.hparams.data_dir, train=False, transform=transform, download=True)
         dataloader = DataLoader(
             dataset,
