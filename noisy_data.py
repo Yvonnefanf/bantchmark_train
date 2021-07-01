@@ -14,12 +14,11 @@ import json
 
 
 class CIFAR10Data(pl.LightningDataModule):
-    def __init__(self, args, path, noisy):
+    def __init__(self, args, path):
         super().__init__()
         self.hparams = args
         self.mean = (0.4914, 0.4822, 0.4465)
         self.std = (0.2471, 0.2435, 0.2616)
-        self.noisy = noisy
         self.path = path
 
         torch.manual_seed(1311)
@@ -32,29 +31,36 @@ class CIFAR10Data(pl.LightningDataModule):
             ]
         )
         dataset = CIFAR10(root=self.hparams.data_dir, train=True, transform=transform, download=True)
+        targets = np.array(dataset.targets)
 
-        targets = dataset.targets
+        mislabel_cls = random.sample(range(10), self.hparams.mislabel_cls_num)
         ori_labels = []
         new_labels = []
-        index = random.sample(range(0, 50000), int(float(self.noisy * 50000)))
-        for i in index:
-            tmp = targets[i]
-            new_label = random.randint(0, 9)
-            if new_label == tmp:
-                targets[i] = (tmp + 1) % 9
-            else:
-                targets[i] = new_label
-            ori_labels.append(tmp)
-            new_labels.append(targets[i])
-        dataset.targets = targets
+        selected_idxs = []
+        for cls in mislabel_cls:
+            idxs = np.argwhere(targets == cls).squeeze()
+            selected_idx = np.random.choice(idxs, size=int(self.hparams.noisy_rate*len(idxs)), replace=False)
+            ori_labels.extend(targets[selected_idx].tolist())
+            selected_idxs.extend(selected_idx.tolist())
+
+            # random assign a new label to seleted index
+            for idx in selected_idx:
+                new_label = random.randint(0, 9)
+                if new_label == cls:
+                    new_labels.append((cls + 1) % 9)
+                else:
+                    new_labels.append(new_label)
+        new_targets = np.copy(targets)
+        new_targets[selected_idxs] = new_labels
+        dataset.targets = new_targets.tolist()
 
         with open(os.path.join(self.path, "old_labels.json"), 'w') as f:
             json.dump(ori_labels, f)
         with open(os.path.join(self.path, "new_labels.json"), 'w') as f:
             json.dump(new_labels, f)
         with open(os.path.join(self.path, "index.json"), 'w') as f:
-            json.dump(index, f)
-        self.trainset = dataset
+            json.dump(selected_idxs, f)
+        self.noisy_trainset = dataset
 
     def download_weights(self):
         url = (
@@ -87,7 +93,7 @@ class CIFAR10Data(pl.LightningDataModule):
 
     def train_dataloader(self):
         dataloader = DataLoader(
-            self.trainset,
+            self.noisy_trainset,
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers,
             shuffle=True,
@@ -116,10 +122,16 @@ class CIFAR10Data(pl.LightningDataModule):
     def test_dataloader(self):
         return self.val_dataloader()
 
-    def save_train_data(self, trainloader, path):
+    def save_train_data(self):
+        dataloader = DataLoader(
+            self.noisy_trainset,
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.num_workers,
+            shuffle=False   # need to keep order, otherwise the index saved would be wrong
+        )
         trainset_data = None
         trainset_label = None
-        for batch_idx, (inputs, targets) in enumerate(trainloader):
+        for batch_idx, (inputs, targets) in enumerate(dataloader):
             if trainset_data != None:
                 # print(input_list.shape, inputs.shape)
                 trainset_data = torch.cat((trainset_data, inputs), 0)
@@ -128,14 +140,14 @@ class CIFAR10Data(pl.LightningDataModule):
                 trainset_data = inputs
                 trainset_label = targets
 
-        training_path = os.path.join(path, "Training_data")
+        training_path = os.path.join(self.path, "Training_data")
         if not os.path.exists(training_path):
             os.mkdir(training_path)
         torch.save(trainset_data, os.path.join(training_path, "training_dataset_data.pth"))
         torch.save(trainset_label, os.path.join(training_path, "training_dataset_label.pth"))
 
-    def save_test_data(self, testloader, path):
-
+    def save_test_data(self):
+        testloader = self.test_dataloader()
         testset_data = None
         testset_label = None
         for batch_idx, (inputs, targets) in enumerate(testloader):
@@ -147,7 +159,7 @@ class CIFAR10Data(pl.LightningDataModule):
                 testset_data = inputs
                 testset_label = targets
 
-        testing_path = os.path.join(path, "Testing_data")
+        testing_path = os.path.join(self.path, "Testing_data")
         if not os.path.exists(testing_path):
             os.mkdir(testing_path)
         torch.save(testset_data, os.path.join(testing_path, "testing_dataset_data.pth"))

@@ -47,16 +47,13 @@ def main(args):
         )
 
         model = CIFAR10Module(args)
-        p = os.path.join(args.filepath, "noisy_models", args.classifier)
-        data = CIFAR10Data(args, p, 0.1)
-        trainloader = data.train_dataloader()
-        data.save_train_data(trainloader, p)
-        testloader = data.test_dataloader()
-        data.save_test_data(testloader, p)
 
-        # state_dict = torch.load("E:\\DVI_exp_data\\resnet18\\Model\\Epoch_165\\subject_model.pth", map_location=torch.device("cuda:0"))
-        # model.model.load_state_dict(state_dict)
-        # trainer.test(model, data.test_dataloader())
+        content_path = os.path.join(".", "models", "noisy")
+        if not os.path.exists(content_path):
+            os.mkdir(content_path)
+        data = CIFAR10Data(args, content_path)
+        data.save_train_data()
+        data.save_test_data()
 
         if bool(args.pretrained):
             state_dict = os.path.join(
@@ -88,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrained", type=int, default=0, choices=[0, 1])
 
     parser.add_argument("--precision", type=int, default=32, choices=[16, 32])
-    parser.add_argument("--batch_size", type=int, default=250)
+    parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--max_epochs", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=2)
     parser.add_argument("--gpu_id", type=str, default="0")
@@ -98,7 +95,10 @@ if __name__ == "__main__":
 
     parser.add_argument("--filepath", type=str, default="models")
     parser.add_argument("--period", type=int, default=10)
-    parser.add_argument("--save_top_k", type=int, default=1)
+    parser.add_argument("--save_top_k", type=int, default=-1)
+
+    parser.add_argument("--mislabel_cls_num", type=int, default=10)
+    parser.add_argument("--noisy_rate", type=float, default=0.1)
 
     args = parser.parse_args()
 
