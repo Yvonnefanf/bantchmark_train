@@ -12,6 +12,13 @@ from module import CIFAR10Module
 
 def main(args):
 
+    content_path = os.path.join(args.filepath, "noisy")
+    if not os.path.exists(content_path):
+        os.mkdir(content_path)
+    content_path = os.path.join(content_path, args.classifier + "_CIFAR10")
+    if not os.path.exists(content_path):
+        os.mkdir(content_path)
+
     if bool(args.download_weights):
         CIFAR10Data.download_weights()
     else:
@@ -24,7 +31,7 @@ def main(args):
             logger = TensorBoardLogger("cifar10", name=args.classifier)
 
         checkpoint = ModelCheckpoint(
-            filepath=os.path.join(args.filepath, "noisy_models", args.classifier, "Model", "{epoch:03d}"),
+            filepath=os.path.join(content_path, "Model", "{epoch:03d}"),
             monitor="acc/val",
             mode="max",
             # save_last=False,
@@ -48,9 +55,6 @@ def main(args):
 
         model = CIFAR10Module(args)
 
-        content_path = os.path.join(".", "models", "noisy")
-        if not os.path.exists(content_path):
-            os.mkdir(content_path)
         data = CIFAR10Data(args, content_path)
         data.save_train_data()
         data.save_test_data()
