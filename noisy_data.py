@@ -11,6 +11,7 @@ from tqdm import tqdm
 import numpy as np
 import random
 import json
+from utils import noisify
 
 
 class CIFAR10Data(pl.LightningDataModule):
@@ -32,34 +33,18 @@ class CIFAR10Data(pl.LightningDataModule):
         )
         dataset = CIFAR10(root=self.hparams.data_dir, train=True, transform=transform, download=True)
         targets = np.array(dataset.targets)
+        # create noise labels
+        noise_rate = self.hparams.noise_rate
+        noise_type = self.hparams.noise_type
+        train_noisy_labels, actual_noise_rate = noisify(nb_classes=10, train_labels=targets, noise_type=noise_type, noise_rate=noise_rate, random_state=0)
+        print("Actual noise rate:\t{:.2f}".format(actual_noise_rate))
 
-        mislabel_cls = random.sample(range(10), self.hparams.mislabel_cls_num)
-        ori_labels = []
-        new_labels = []
-        selected_idxs = []
-        for cls in mislabel_cls:
-            idxs = np.argwhere(targets == cls).squeeze()
-            selected_idx = np.random.choice(idxs, size=int(self.hparams.noisy_rate*len(idxs)), replace=False)
-            ori_labels.extend(targets[selected_idx].tolist())
-            selected_idxs.extend(selected_idx.tolist())
+        with open(os.path.join(self.path, "clean_label.json"), 'w') as f:
+            json.dump(targets.tolist(), f)
+        with open(os.path.join(self.path, "noisy_label.json"), 'w') as f:
+            json.dump(train_noisy_labels.tolist(), f)
 
-            # random assign a new label to seleted index
-            for idx in selected_idx:
-                new_label = random.randint(0, 9)
-                if new_label == cls:
-                    new_labels.append((cls + 1) % 9)
-                else:
-                    new_labels.append(new_label)
-        new_targets = np.copy(targets)
-        new_targets[selected_idxs] = new_labels
-        dataset.targets = new_targets.tolist()
-
-        with open(os.path.join(self.path, "old_labels.json"), 'w') as f:
-            json.dump(ori_labels, f)
-        with open(os.path.join(self.path, "new_labels.json"), 'w') as f:
-            json.dump(new_labels, f)
-        with open(os.path.join(self.path, "index.json"), 'w') as f:
-            json.dump(selected_idxs, f)
+        dataset.targets = train_noisy_labels.tolist()
         self.noisy_trainset = dataset
 
     def download_weights(self):

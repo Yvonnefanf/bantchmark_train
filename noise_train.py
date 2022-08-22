@@ -12,12 +12,8 @@ from module import CIFAR10Module
 
 def main(args):
 
-    content_path = os.path.join(args.filepath, "noisy")
-    if not os.path.exists(content_path):
-        os.mkdir(content_path)
-    content_path = os.path.join(content_path, args.classifier + "_CIFAR10")
-    if not os.path.exists(content_path):
-        os.mkdir(content_path)
+    content_path = os.path.join(args.filepath, args.noise_type, "cifar10", str(int(args.noise_rate*100)))
+    os.makedirs(content_path, exist_ok=True)
 
     if bool(args.download_weights):
         CIFAR10Data.download_weights()
@@ -89,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrained", type=int, default=0, choices=[0, 1])
 
     parser.add_argument("--precision", type=int, default=32, choices=[16, 32])
-    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--max_epochs", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=2)
     parser.add_argument("--gpu_id", type=str, default="0")
@@ -101,8 +97,8 @@ if __name__ == "__main__":
     parser.add_argument("--period", type=int, default=10)
     parser.add_argument("--save_top_k", type=int, default=-1)
 
-    parser.add_argument("--mislabel_cls_num", type=int, default=10)
-    parser.add_argument("--noisy_rate", type=float, default=0.1)
+    parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="symmetric")
+    parser.add_argument("--noise_rate", type=float, default=0.1)
 
     args = parser.parse_args()
 
