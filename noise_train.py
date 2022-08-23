@@ -39,7 +39,7 @@ def main(args):
         trainer = Trainer(
             fast_dev_run=bool(args.dev),
             logger=logger if not bool(args.dev + args.test_phase) else None,
-            gpus=args.gpu_id,
+            gpus="0",
             deterministic=True,
             weights_summary=None,
             log_every_n_steps=1,
@@ -93,8 +93,8 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="models")
-    parser.add_argument("--period", type=int, default=10)
+    parser.add_argument("--filepath", type=str, default="/home/xianglin/projects/DVI_data/noisy")
+    parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
 
     parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="symmetric")

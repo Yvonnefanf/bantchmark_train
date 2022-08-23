@@ -18,12 +18,9 @@ def main(args):
         seed_everything(0)
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
-        if args.logger == "wandb":
-            logger = WandbLogger(name=args.classifier, project="cifar10")
-        elif args.logger == "tensorboard":
-            logger = TensorBoardLogger("cifar10", name=args.classifier)
-
         checkpoint = ModelCheckpoint(
+            # dirpath=os.path.join(args.filepath, args.classifier),
+            # filename="{epoch:03d}",
             filepath=os.path.join(args.filepath, args.classifier, "{epoch:03d}"),
             monitor="acc/val",
             mode="max",
@@ -35,7 +32,6 @@ def main(args):
 
         trainer = Trainer(
             fast_dev_run=bool(args.dev),
-            logger=logger if not bool(args.dev + args.test_phase) else None,
             gpus=args.gpu_id,
             deterministic=True,
             weights_summary=None,
@@ -70,9 +66,6 @@ if __name__ == "__main__":
     parser.add_argument("--download_weights", type=int, default=0, choices=[0, 1])
     parser.add_argument("--test_phase", type=int, default=0, choices=[0, 1])
     parser.add_argument("--dev", type=int, default=0, choices=[0, 1])
-    parser.add_argument(
-        "--logger", type=str, default="tensorboard", choices=["tensorboard", "wandb"]
-    )
 
     # TRAINER args
     parser.add_argument("--classifier", type=str, default="resnet18")
@@ -88,8 +81,8 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
     parser.add_argument("--filepath", type=str, default="models")
-    parser.add_argument("--period", type=int, default=10)
-    parser.add_argument("--save_top_k", type=int, default=1)
+    parser.add_argument("--period", type=int, default=1)
+    parser.add_argument("--save_top_k", type=int, default=-1)
 
     args = parser.parse_args()
     main(args)
