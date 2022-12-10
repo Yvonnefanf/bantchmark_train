@@ -12,7 +12,7 @@ from module import CIFAR10Module
 
 def main(args):
 
-    content_path = os.path.join(args.filepath, args.noise_type, "cifar10", str(int(args.noise_rate*100)))
+    content_path = os.path.join(args.filepath, args.noise_type, "cifar10", str(int(args.learning_rate)))
     os.makedirs(content_path, exist_ok=True)
 
     if bool(args.download_weights):
@@ -88,17 +88,17 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--max_epochs", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=2)
-    parser.add_argument("--gpu_id", type=str, default="0")
+    parser.add_argument("--gpu_id", type=str, default="1")
 
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="/home/xianglin/projects/DVI_data/noisy")
+    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/clean")
     parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
 
-    parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="symmetric")
-    parser.add_argument("--noise_rate", type=float, default=0.1)
+    parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="pairflip")
+    parser.add_argument("--noise_rate", type=float, default=0.0)
 
     args = parser.parse_args()
 

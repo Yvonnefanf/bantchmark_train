@@ -18,6 +18,23 @@ def multiclass_noisify(y, P, random_state=0):
         flipped = flipper.multinomial(1, P[i, :], 1)[0]
         new_y[idx] = np.where(flipped == 1)[0]
     return new_y
+def specifyclass_noisyfy(y, P,random_state=0):
+    # print(np.max(y), P.shape[0])
+    m = y.shape[0]
+    new_y = y.copy()
+    assert P.shape[0] == P.shape[1]
+    assert np.max(y) < P.shape[0]
+    flipped = 0
+
+    for idx in np.arange(m):
+        if new_y[idx] == 2 and flipped < 500:
+            flipped = flipped + 1
+            new_y[idx] = 3
+    print('nee',new_y)
+    return new_y
+        
+
+
 
 def noisify_pairflip(y_train, noise, random_state=None, nb_classes=10):
     """mistakes:
@@ -33,13 +50,17 @@ def noisify_pairflip(y_train, noise, random_state=None, nb_classes=10):
             P[i, i], P[i, i + 1] = 1. - n, n
         P[nb_classes-1, nb_classes-1], P[nb_classes-1, 0] = 1. - n, n
 
-        y_train_noisy = multiclass_noisify(y_train, P=P,
+        y_train_noisy = specifyclass_noisyfy(y_train, P=P,
                                            random_state=random_state)
         actual_noise = (y_train_noisy != y_train).mean()
         assert actual_noise > 0.0
         print('Actual noise %.2f' % actual_noise)
         y_train = y_train_noisy
+    else: 
+        actual_noise = 0
+
     print(P)
+
 
     return y_train, actual_noise
 

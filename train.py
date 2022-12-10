@@ -68,7 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("--dev", type=int, default=0, choices=[0, 1])
 
     # TRAINER args
-    parser.add_argument("--classifier", type=str, default="resnet18")
+    parser.add_argument("--classifier", type=str, default="resnet50")
     parser.add_argument("--pretrained", type=int, default=0, choices=[0, 1])
 
     parser.add_argument("--precision", type=int, default=32, choices=[16, 32])
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="models")
+    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/resnet50")
     parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
 
