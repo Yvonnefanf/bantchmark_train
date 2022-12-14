@@ -18,20 +18,35 @@ def multiclass_noisify(y, P, random_state=0):
         flipped = flipper.multinomial(1, P[i, :], 1)[0]
         new_y[idx] = np.where(flipped == 1)[0]
     return new_y
-def specifyclass_noisyfy(y, P,random_state=0):
+#### label2 calss as same 
+def confusion_noisyfy(y, P,random_state=0):
     # print(np.max(y), P.shape[0])
     m = y.shape[0]
     new_y = y.copy()
     assert P.shape[0] == P.shape[1]
     assert np.max(y) < P.shape[0]
-    flipped = 0
 
     for idx in np.arange(m):
-        if new_y[idx] == 2 and flipped < 500:
-            flipped = flipped + 1
+        if new_y[idx] == 2:
+ 
             new_y[idx] = 3
-    print('nee',new_y)
     return new_y
+
+#### exchange 2 label
+# def exchange_noisyfy(y, P,random_state=0):
+#     # print(np.max(y), P.shape[0])
+#     m = y.shape[0]
+#     new_y = y.copy()
+#     assert P.shape[0] == P.shape[1]
+#     assert np.max(y) < P.shape[0]
+
+#     for idx in np.arange(m):
+#         if new_y[idx] == 2:
+#             new_y[idx] = 3
+#         elif new_y[idx] == 3:
+#             new_y[idx] = 2
+#     print('nee',new_y)
+#     return new_y
         
 
 
