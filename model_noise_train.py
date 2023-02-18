@@ -7,7 +7,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
 from noisy_data import CIFAR10Data
-from module import CIFAR10Module
+from noiseModel import CIFAR10Module
 
 
 def main(args):
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/resnetwithoutnoise")
+    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/LeakyRelu")
     parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
 

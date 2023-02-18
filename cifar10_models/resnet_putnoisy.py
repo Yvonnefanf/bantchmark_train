@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 import os
+import torch.nn.functional as F
 
 __all__ = [
     "ResNet",
+    "resnet18_noise",
     "resnet18",
-    "resnet34",
-    "resnet50",
+    # "resnet50",
 ]
 
 
@@ -29,51 +30,93 @@ def conv1x1(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
+class NoiseBasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1,downsample=None,groups=1,base_width=64,dilation=1,norm_layer=None):
+    # expansion = 1
+
+    # def __init__(self, in_planes, planes, stride=1):
+        super(NoiseBasicBlock, self).__init__()
+        self.add_noise = False
+
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+            
+        if planes == 64:
+            self.sigma_map = nn.Parameter(torch.ones((64, 32, 32))*0.25, requires_grad=True)
+        elif planes == 128:
+            self.sigma_map = nn.Parameter(torch.ones((128, 16, 16))*0.25, requires_grad=True)
+        elif planes == 256:
+            self.sigma_map = nn.Parameter(torch.ones((256, 8, 8))*0.25, requires_grad=True)
+        else:
+            self.sigma_map = nn.Parameter(torch.ones((512, 4, 4))*0.25, requires_grad=True)
+
+    def put_noise(self, mode = True):
+        self.add_noise = mode
+    
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+
+        out = self.bn2(self.conv2(out))
+
+        short = self.shortcut(x)
+
+        out += short
+
+        if self.add_noise:
+            self.normal_noise = self.sigma_map.clone().normal_(0,1)
+            self.perf = self.normal_noise * self.sigma_map
+            self.final_noise = self.perf.expand(out.size())
+
+            out += self.final_noise
+
+        out = F.relu(out)
+
+        return out
+    
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(
-        self,
-        inplanes,
-        planes,
-        stride=1,
-        downsample=None,
-        groups=1,
-        base_width=64,
-        dilation=1,
-        norm_layer=None,
-    ):
+    def __init__(self, in_planes, planes, stride=1,downsample=None,groups=1,base_width=64,dilation=1,norm_layer=None):
         super(BasicBlock, self).__init__()
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        if groups != 1 or base_width != 64:
-            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
-        if dilation > 1:
-            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
-        self.stride = stride
+       
 
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+            
+
+    def put_noise(self, mode = True):
+        self.add_noise = mode
+    
     def forward(self, x):
-        identity = x
+        out = F.relu(self.bn1(self.conv1(x)))
 
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+        out = self.bn2(self.conv2(out))
 
-        out = self.conv2(out)
-        out = self.bn2(out)
+        short = self.shortcut(x)
 
-        if self.downsample is not None:
-            identity = self.downsample(x)
+        out += short
 
-        out += identity
-        out = self.relu(out)
+        out = F.relu(out)
 
         return out
 
@@ -136,12 +179,14 @@ class ResNet(nn.Module):
         self,
         block,
         layers,
+        add_noise,
         num_classes=10,
         zero_init_residual=True,
         groups=1,
         width_per_group=64,
         replace_stride_with_dilation=None,
         norm_layer=None,
+        
     ):
         super(ResNet, self).__init__()
         if norm_layer is None:
@@ -149,6 +194,10 @@ class ResNet(nn.Module):
         self._norm_layer = norm_layer
 
         self.inplanes = 64
+
+        self.add_noise = add_noise
+        self.cn1_sigma_map = nn.Parameter(torch.ones((64, 32, 32)) * 0.25 , requires_grad=True)
+
         self.dilation = 1
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
@@ -248,6 +297,13 @@ class ResNet(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
+
+        if self.add_noise:
+            self.cn1_normal_noise = torch.randn_like(self.cn1_sigma_map)
+            self.cn1_perf = (self.cn1_normal_noise * self.cn1_sigma_map)
+            self.cn1_final_noise = self.cn1_perf.expand(x.size())
+            x += self.cn1_final_noise
+
         x = self.relu(x)
         x = self.maxpool(x)
 
@@ -278,8 +334,8 @@ class ResNet(nn.Module):
         return x
 
 
-def _resnet(arch, block, layers, pretrained, progress, device, **kwargs):
-    model = ResNet(block, layers, **kwargs)
+def _resnet(arch, block, layers, add_noise, pretrained, progress, device, **kwargs):
+    model = ResNet(block, layers, add_noise,**kwargs)
     if pretrained:
         script_dir = os.path.dirname(__file__)
         state_dict = torch.load(
@@ -289,6 +345,16 @@ def _resnet(arch, block, layers, pretrained, progress, device, **kwargs):
     return model
 
 
+def resnet18_noise(pretrained=False, progress=True, device="cpu", **kwargs):
+    """Constructs a ResNet-18 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet(
+        "resnet18", NoiseBasicBlock, [2, 2, 2, 2], True, pretrained, progress, device, **kwargs
+    )
+
 def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
     """Constructs a ResNet-18 model.
     Args:
@@ -296,28 +362,27 @@ def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet(
-        "resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, device, **kwargs
+        "resnet18", BasicBlock, [2, 2, 2, 2], False, pretrained, progress, device, **kwargs
     )
 
+# def resnet34(pretrained=False, progress=True, device="cpu", **kwargs):
+#     """Constructs a ResNet-34 model.
+#     Args:
+#         pretrained (bool): If True, returns a model pre-trained on ImageNet
+#         progress (bool): If True, displays a progress bar of the download to stderr
+#     """
+#     return _resnet(
+#         "resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, device, **kwargs
+#     )
 
-def resnet34(pretrained=False, progress=True, device="cpu", **kwargs):
-    """Constructs a ResNet-34 model.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _resnet(
-        "resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, device, **kwargs
-    )
 
-
-def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
-    """Constructs a ResNet-50 model.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _resnet(
-        "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
-    )
+# def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
+#     """Constructs a ResNet-50 model.
+#     Args:
+#         pretrained (bool): If True, returns a model pre-trained on ImageNet
+#         progress (bool): If True, displays a progress bar of the download to stderr
+#     """
+#     return _resnet(
+#         "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
+#     )
 

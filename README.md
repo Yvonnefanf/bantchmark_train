@@ -1,4 +1,4 @@
-# PyTorch models trained on CIFAR-10 dataset
+<!-- # PyTorch models trained on CIFAR-10 dataset
 - I modified [TorchVision](https://pytorch.org/docs/stable/torchvision/models.html) official implementation of popular CNN models, and trained those on CIFAR-10 dataset.
 - I changed *number of class, filter size, stride, and padding* in the the original code so that it works with CIFAR-10.
 - I also share the **weights** of these models, so you can just load the weights and use them.
@@ -75,4 +75,14 @@ Output
 - pytorch = 1.7.0
 - torchvision = 0.7.0
 - tensorboard = 2.2.1
-- pytorch-lightning = 1.1.0
+- pytorch-lightning = 1.1.0 -->
+
+
+**To train**
+python noise_train.py
+
+**To add perturb**
+1.add custom model in cifar10_models/
+2.import in module.py
+
+

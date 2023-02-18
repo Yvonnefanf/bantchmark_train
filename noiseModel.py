@@ -2,13 +2,13 @@ import pytorch_lightning as pl
 import torch
 # from pytorch_lightning.metrics import Accuracy
 from torchmetrics import Accuracy
+from torch import nn, optim
 
 from cifar10_models.densenet import densenet121, densenet161, densenet169
 from cifar10_models.googlenet import googlenet
 from cifar10_models.inception import inception_v3
 from cifar10_models.mobilenetv2 import mobilenet_v2
-from cifar10_models.resnet import resnet34, resnet50
-from cifar10_models.resnet_putnoisy import resnet18_noise, resnet18
+from cifar10_models.resnet import resnet18, resnet34, resnet50
 from cifar10_models.vgg import vgg11_bn, vgg13_bn, vgg16_bn, vgg19_bn
 from schduler import WarmupCosineLR
 
@@ -26,7 +26,6 @@ all_classifiers = {
     "mobilenet_v2": mobilenet_v2(),
     "googlenet": googlenet(),
     "inception_v3": inception_v3(),
-    "resnet18_noise" : resnet18_noise()
 }
 
 
@@ -41,6 +40,13 @@ class CIFAR10Module(pl.LightningModule):
         self.accuracy = Accuracy()
 
         self.model = all_classifiers[self.hparams.classifier]
+
+        # 修改模型
+        self.model.conv1 = nn.Conv2d(3, 64, 3, stride=1, padding=1, bias=False)  # 首层改成3x3卷积核
+        self.model.maxpool = nn.MaxPool2d(1, 1, 0)  # 图像太小 本来就没什么特征 所以这里通过1x1的池化核让池化层失效
+        num_ftrs = self.model.fc.in_features  # 获取（fc）层的输入的特征数
+        self.model.fc = nn.Linear(num_ftrs, 10)
+ 
 
     def forward(self, batch):
         images, labels = batch
