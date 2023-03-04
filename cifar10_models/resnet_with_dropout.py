@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import os
-import torch.nn.functional as F
+from .layers import *
 
 __all__ = [
     "ResNet",
-    "resnet18_noise",
+    "resnet18_with_dropout",
     "resnet18",
-    # "resnet50",
+    "dropout_resnet18"
 ]
 
 
@@ -29,94 +29,103 @@ def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-
-class NoiseBasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, in_planes, planes, stride=1,downsample=None,groups=1,base_width=64,dilation=1,norm_layer=None):
-    # expansion = 1
-
-    # def __init__(self, in_planes, planes, stride=1):
-        super(NoiseBasicBlock, self).__init__()
-        self.add_noise = False
-
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
-            
-        if planes == 64:
-            self.sigma_map = nn.Parameter(torch.ones((64, 32, 32))*0.25, requires_grad=True)
-        elif planes == 128:
-            self.sigma_map = nn.Parameter(torch.ones((128, 16, 16))*0.25, requires_grad=True)
-        elif planes == 256:
-            self.sigma_map = nn.Parameter(torch.ones((256, 8, 8))*0.25, requires_grad=True)
-        else:
-            self.sigma_map = nn.Parameter(torch.ones((512, 4, 4))*0.25, requires_grad=True)
-
-    def put_noise(self, mode = True):
-        self.add_noise = mode
-    
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-
-        out = self.bn2(self.conv2(out))
-
-        short = self.shortcut(x)
-
-        out += short
-
-        if self.add_noise:
-            self.normal_noise = self.sigma_map.clone().normal_(0,1)
-            self.perf = self.normal_noise * self.sigma_map
-            self.final_noise = self.perf.expand(out.size())
-
-            out += self.final_noise
-
-        out = F.relu(out)
-
-        return out
-    
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1,downsample=None,groups=1,base_width=64,dilation=1,norm_layer=None):
+    def __init__(
+        self,
+        inplanes,
+        planes,
+        stride=1,
+        downsample=None,
+        groups=1,
+        base_width=64,
+        dilation=1,
+        norm_layer=None,
+    ):
         super(BasicBlock, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        if groups != 1 or base_width != 64:
+            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
+        if dilation > 1:
+            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
+        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = conv3x3(inplanes, planes, stride)
+        self.bn1 = norm_layer(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(planes, planes)
+        self.bn2 = norm_layer(planes)
+        self.downsample = downsample
+        self.stride = stride
+        print('with_dropout',self.with_dropout)
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
+
+class BasicBlock_withDropout(nn.Module):
+    expansion = 1
+
+    def __init__(
+        self,
+        inplanes,
+        planes,
+        stride=1,
+        downsample=None,
+        groups=1,
+        base_width=64,
+        dilation=1,
+        norm_layer=None,
+    ):
+        super(BasicBlock_withDropout, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        if groups != 1 or base_width != 64:
+            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
+        if dilation > 1:
+            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
+        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
+        self.dropout = nn.Dropout(p=0.5)
+        self.conv1 = conv3x3(inplanes, planes, stride)
+        self.bn1 = norm_layer(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(planes, planes)
+        self.bn2 = norm_layer(planes)
+        self.downsample = downsample
+        self.stride = stride
+        # print('with_dropout',self.with_dropout)
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
        
 
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        out = self.conv2(out)
+        out = self.bn2(out)
 
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
-            
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
-    def put_noise(self, mode = True):
-        self.add_noise = mode
-    
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-
-        out = self.bn2(self.conv2(out))
-
-        short = self.shortcut(x)
-
-        out += short
-
-        out = F.relu(out)
+        out += identity
+        out = self.relu(out)
 
         return out
 
@@ -178,9 +187,9 @@ class ResNet(nn.Module):
         self,
         block,
         layers,
-        add_noise,
+        with_dropout,
         num_classes=10,
-        zero_init_residual=True,
+        zero_init_residual=False,
         groups=1,
         width_per_group=64,
         replace_stride_with_dilation=None,
@@ -193,10 +202,6 @@ class ResNet(nn.Module):
         self._norm_layer = norm_layer
 
         self.inplanes = 64
-
-        self.add_noise = add_noise
-        self.cn1_sigma_map = nn.Parameter(torch.ones((64, 32, 32)) * 0.25 , requires_grad=True)
-
         self.dilation = 1
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
@@ -207,6 +212,8 @@ class ResNet(nn.Module):
                 "replace_stride_with_dilation should be None "
                 "or a 3-element tuple, got {}".format(replace_stride_with_dilation)
             )
+        
+        self.with_dropout = with_dropout
         self.groups = groups
         self.base_width = width_per_group
 
@@ -233,9 +240,14 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        if self.with_dropout:
+            self.fc = nn.Sequential(nn.Flatten(),nn.Dropout(0.5),nn.Linear(512 * block.expansion, num_classes))
+            
+        
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="leaky_relu")
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -294,21 +306,17 @@ class ResNet(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-
-        if self.add_noise:
-            self.cn1_normal_noise = torch.randn_like(self.cn1_sigma_map)
-            self.cn1_perf = (self.cn1_normal_noise * self.cn1_sigma_map)
-            self.cn1_final_noise = self.cn1_perf.expand(x.size())
-            x += self.cn1_final_noise
-
         x = self.relu(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
 
+        x = self.layer2(x)
+
+        x = self.layer3(x)
+ 
+        x = self.layer4(x)
+        
         x = self.avgpool(x)
         x = x.reshape(x.size(0), -1)
         x = self.fc(x)
@@ -331,8 +339,8 @@ class ResNet(nn.Module):
         return x
 
 
-def _resnet(arch, block, layers, add_noise, pretrained, progress, device, **kwargs):
-    model = ResNet(block, layers, add_noise,**kwargs)
+def _resnet(arch, block, layers, pretrained, progress, device, with_dropout, **kwargs):
+    model = ResNet(block, layers, with_dropout, **kwargs)
     if pretrained:
         script_dir = os.path.dirname(__file__)
         state_dict = torch.load(
@@ -342,14 +350,14 @@ def _resnet(arch, block, layers, add_noise, pretrained, progress, device, **kwar
     return model
 
 
-def resnet18_noise(pretrained=False, progress=True, device="cpu", **kwargs):
+def resnet18_with_dropout(pretrained=False, progress=True, device="cpu", **kwargs):
     """Constructs a ResNet-18 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet(
-        "resnet18", NoiseBasicBlock, [2, 2, 2, 2], True, pretrained, progress, device, **kwargs
+        "resnet18", BasicBlock_withDropout, [2, 2, 2, 2], pretrained, progress, device, with_dropout = True, **kwargs
     )
 
 def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
@@ -359,27 +367,68 @@ def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet(
-        "resnet18", BasicBlock, [2, 2, 2, 2], False, pretrained, progress, device, **kwargs
+        "resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, device, with_dropout = False, **kwargs
     )
 
-# def resnet34(pretrained=False, progress=True, device="cpu", **kwargs):
-#     """Constructs a ResNet-34 model.
-#     Args:
-#         pretrained (bool): If True, returns a model pre-trained on ImageNet
-#         progress (bool): If True, displays a progress bar of the download to stderr
-#     """
-#     return _resnet(
-#         "resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, device, **kwargs
-#     )
+
+def resnet34(pretrained=False, progress=True, device="cpu", **kwargs):
+    """Constructs a ResNet-34 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet(
+        "resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, device, **kwargs
+    )
 
 
-# def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
-#     """Constructs a ResNet-50 model.
-#     Args:
-#         pretrained (bool): If True, returns a model pre-trained on ImageNet
-#         progress (bool): If True, displays a progress bar of the download to stderr
-#     """
-#     return _resnet(
-#         "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
-#     )
+def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
+    """Constructs a ResNet-50 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet(
+        "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
+    )
+
+class dropout_residual(nn.Module):
+  def __init__(self, input_channels, num_channels, dropout_rate, dropout_type, init_dict, use_1x1conv=False, strides=1, **kwargs):
+    super().__init__(**kwargs)
+    self.conv1 = Dropout_Conv2D(input_channels, num_channels, kernel_size=3, padding=1, stride=strides, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict)
+    self.conv2 = Dropout_Conv2D(num_channels, num_channels, kernel_size=3, padding=1, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict)
+
+    if use_1x1conv:
+      self.conv3 = Dropout_Conv2D(input_channels, num_channels, kernel_size=1, stride=strides, dropout_rate=dropout_rate, dropout_type=dropout_type)
+    else:
+      self.conv3 = None
+    
+    self.bn1 = nn.BatchNorm2d(num_channels)
+    self.bn2 = nn.BatchNorm2d(num_channels)
+
+def dropout_resnet_block(input_channels, num_channels, num_residuals, dropout_rate, dropout_type, init_dict, first_block=False):
+  blk = []
+  for i in range(num_residuals):
+    if i == 0 and not first_block:
+      blk.append(dropout_residual(input_channels, num_channels, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict, use_1x1conv=True, strides=2))
+    else:
+      blk.append(dropout_residual(num_channels, num_channels, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
+  return blk
+
+def dropout_resnet18(dropout_rate=0.5, dropout_type="w", init_dict=dict()):
+  b1 = nn.Sequential(
+      Dropout_Conv2D(1, 64, kernel_size=7, stride=2, padding=3, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict),
+      nn.BatchNorm2d(64),
+      nn.ReLU(),
+      nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+    )
+  b2 = nn.Sequential(*dropout_resnet_block(64, 64, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict, first_block=True))
+  b3 = nn.Sequential(*dropout_resnet_block(64, 128, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
+  b4 = nn.Sequential(*dropout_resnet_block(128, 256, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
+  b5 = nn.Sequential(*dropout_resnet_block(256, 512, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
+
+  return nn.Sequential(b1, b2, b3, b4, b5,
+                       nn.AdaptiveAvgPool2d((1,1)),
+                       nn.Flatten(),
+                       Dropout_Linear(512, 20, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
 

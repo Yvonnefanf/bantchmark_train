@@ -103,8 +103,7 @@ class Bottleneck(nn.Module):
         self.bn2 = norm_layer(width)
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
-        # self.relu = nn.ReLU(inplace=True)
-        self.relu = nn.LeakyReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -137,7 +136,7 @@ class ResNet(nn.Module):
         block,
         layers,
         num_classes=10,
-        zero_init_residual=True,
+        zero_init_residual=False,
         groups=1,
         width_per_group=64,
         replace_stride_with_dilation=None,
@@ -169,10 +168,7 @@ class ResNet(nn.Module):
         # END
 
         self.bn1 = norm_layer(self.inplanes)
-        # self.relu = nn.ReLU(inplace=True)
-        self.relu = nn.LeakyReLU(inplace=True)
-        
-        # self.relu = nn.LeakyRelu(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(
@@ -189,7 +185,7 @@ class ResNet(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="leaky_relu")
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -320,4 +316,3 @@ def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
     return _resnet(
         "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
     )
-
