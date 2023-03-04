@@ -12,9 +12,6 @@ from cifar10_models.resnet_with_dropout import resnet18_with_dropout
 from cifar10_models.vgg import vgg11_bn, vgg13_bn, vgg16_bn, vgg19_bn
 from schduler import WarmupCosineLR
 
-import foolbox as fb
-import torch.nn.functional as F
-import random
 
 all_classifiers = {
     "vgg11_bn": vgg11_bn(),
@@ -49,6 +46,7 @@ class CIFAR10Module(pl.LightningModule):
         self.model = all_classifiers[self.hparams.classifier]
 
 
+
     def forward(self, batch):
         images, labels = batch
         predictions = self.model(images)
@@ -62,23 +60,7 @@ class CIFAR10Module(pl.LightningModule):
        
         images, labels = batch
         loss, accuracy = self.forward((images, labels))
-        # self.log("loss/train", loss)
-        # self.log("acc/train", accuracy)
-        if self.need_adv:
-            x, y = batch
-            x = torch.clamp(x, 0, 1)  # clamp input tensor to valid range
-            y = torch.clamp(y, 0, 1)  # clamp label tensor to valid range
-            # self.fmodel = fb.PyTorchModel(self.model, bounds=(0, 1))
-            self.fmodel = fb.PyTorchModel(self.model, bounds=(0, 1))
 
-            num_samples = x.shape[0]
-            num_attacks = int(0.2 * num_samples)
-            attack_indices = random.sample(range(num_samples), num_attacks)
-            epsilon = 0.05  # set the epsilon value for the FGSM attack
-            x_adv = x.clone()
-            _, x_adv[attack_indices], success = fb.attacks.FGSM()(self.fmodel, x[attack_indices], y[attack_indices], epsilons=epsilon)
-            adv_loss, _ = self.forward((x_adv[attack_indices], y[attack_indices]))
-            loss = 0.5 * loss + 0.5 * adv_loss
 
         self.log("loss/train", loss)
         self.log("acc/train", accuracy)

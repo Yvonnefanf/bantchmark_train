@@ -6,13 +6,13 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
-from noisy_data import CIFAR10Data
+from adversary_data import CIFAR10Data
 from module import CIFAR10Module
 
 
 def main(args):
 
-    content_path = os.path.join(args.filepath, args.noise_type, "cifar10", str(int(args.noise_rate*100)))
+    content_path = os.path.join(args.filepath,"cifar10", str(int(args.adversary_rate*100)))
     os.makedirs(content_path, exist_ok=True)
 
     if bool(args.download_weights):
@@ -46,7 +46,6 @@ def main(args):
             max_epochs=args.max_epochs,
             checkpoint_callback=checkpoint,
             precision=args.precision,
-
         )
 
         model = CIFAR10Module(args)
@@ -98,8 +97,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_top_k", type=int, default=-1)
     parser.add_argument("--need_adv", type=bool, default=True)
 
-    parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="pairflip")
-    parser.add_argument("--noise_rate", type=float, default=0.0)
+    parser.add_argument("--adversary_rate",type=float, default=0.1)
 
     args = parser.parse_args()
 
