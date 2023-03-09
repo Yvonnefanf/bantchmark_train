@@ -92,12 +92,14 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/resnet18_with_adv_10%")
+    parser.add_argument("--filepath", type=str, default="/home/yifan/dataset/resnet18_with_adv_30_c_1")
+    parser.add_argument("--adversary_class", type=int, default=1)
     parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
     parser.add_argument("--need_adv", type=bool, default=True)
 
-    parser.add_argument("--adversary_rate",type=float, default=0.1)
+    parser.add_argument("--adversary_rate",type=float, default=0.3)
+    parser.add_argument("--optimizer", type=str, default="SGD-M")
 
     args = parser.parse_args()
 

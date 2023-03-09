@@ -77,7 +77,13 @@ class CIFAR10Module(pl.LightningModule):
         self.log("acc/test", accuracy)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(
+        if self.hparams.optimizer == 'Adam':
+               print('Adam')
+               optimizer = torch.optim.Adam(self.model.parameters(),
+                                     lr=self.hparams.learning_rate,betas=(0.9, 0.999))
+        else:
+            print('SGD')
+            optimizer = torch.optim.SGD(
             self.model.parameters(),
             lr=self.hparams.learning_rate,
             # weight_decay=self.hparams.weight_decay,
