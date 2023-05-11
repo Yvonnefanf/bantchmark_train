@@ -1,15 +1,31 @@
 import torch
 import torch.nn as nn
 import os
-from .layers import *
 
 __all__ = [
     "ResNet",
-    "resnet18_with_dropout",
     "resnet18",
-    "dropout_resnet18"
+    "resnet34",
+    "resnet50",
+    "resnet18_with_mutation"
 ]
-dropout_rate = 0.5
+
+import random
+
+class RandomChannelDrop(torch.nn.Module):
+    def __init__(self, p=0.5):
+        super(RandomChannelDrop, self).__init__()
+        self.p = p
+
+    def forward(self, x):
+        if self.training:
+            n, c, h, w = x.size()
+            drop_prob = random.uniform(0, self.p)
+            if drop_prob > 0:
+                drop_channels = random.sample(range(c), int(c * drop_prob))
+                x = x.clone()
+                x[:, drop_channels, :, :] = 0
+        return x
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -29,6 +45,7 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -59,7 +76,6 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
-        print('with_dropout',self.with_dropout)
 
     def forward(self, x):
         identity = x
@@ -67,57 +83,6 @@ class BasicBlock(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out += identity
-        out = self.relu(out)
-
-        return out
-
-class BasicBlock_withDropout(nn.Module):
-    expansion = 1
-
-    def __init__(
-        self,
-        inplanes,
-        planes,
-        stride=1,
-        downsample=None,
-        groups=1,
-        base_width=64,
-        dilation=1,
-        norm_layer=None,
-    ):
-        super(BasicBlock_withDropout, self).__init__()
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        if groups != 1 or base_width != 64:
-            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
-        if dilation > 1:
-            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.dropout = nn.Dropout(p=dropout_rate)
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
-        self.stride = stride
-        # print('with_dropout',self.with_dropout)
-
-    def forward(self, x):
-        identity = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-       
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -188,19 +153,20 @@ class ResNet(nn.Module):
         self,
         block,
         layers,
-        with_dropout,
         num_classes=10,
         zero_init_residual=False,
         groups=1,
         width_per_group=64,
         replace_stride_with_dilation=None,
         norm_layer=None,
-        
+        need_mutation=False
     ):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
+        self.need_mutation = need_mutation
+        self.random_channel_drop = RandomChannelDrop(p=0.4)
 
         self.inplanes = 64
         self.dilation = 1
@@ -213,8 +179,6 @@ class ResNet(nn.Module):
                 "replace_stride_with_dilation should be None "
                 "or a 3-element tuple, got {}".format(replace_stride_with_dilation)
             )
-        
-        self.with_dropout = with_dropout
         self.groups = groups
         self.base_width = width_per_group
 
@@ -226,7 +190,6 @@ class ResNet(nn.Module):
 
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
- 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(
@@ -240,11 +203,6 @@ class ResNet(nn.Module):
         )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        if self.with_dropout:
-            self.fc = nn.Sequential(nn.Flatten(),nn.Dropout(dropout_rate),nn.Linear(512 * block.expansion, num_classes))
-            
-        
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -308,16 +266,15 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        if self.need_mutation:
+            x = self.random_channel_drop(x)  # 在卷积层处进行随机通道删除扰动
         x = self.maxpool(x)
 
         x = self.layer1(x)
-
         x = self.layer2(x)
-
         x = self.layer3(x)
- 
         x = self.layer4(x)
-        
+
         x = self.avgpool(x)
         x = x.reshape(x.size(0), -1)
         x = self.fc(x)
@@ -340,8 +297,8 @@ class ResNet(nn.Module):
         return x
 
 
-def _resnet(arch, block, layers, pretrained, progress, device, with_dropout, **kwargs):
-    model = ResNet(block, layers, with_dropout, **kwargs)
+def _resnet(arch, block, layers, pretrained, progress, need_mutation, device, **kwargs):
+    model = ResNet(block, layers, need_mutation=need_mutation, **kwargs)
     if pretrained:
         script_dir = os.path.dirname(__file__)
         state_dict = torch.load(
@@ -351,16 +308,6 @@ def _resnet(arch, block, layers, pretrained, progress, device, with_dropout, **k
     return model
 
 
-def resnet18_with_dropout(pretrained=False, progress=True, device="cpu", **kwargs):
-    """Constructs a ResNet-18 model.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _resnet(
-        "resnet18", BasicBlock_withDropout, [2, 2, 2, 2], pretrained, progress, device, with_dropout = True, **kwargs
-    )
-
 def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
     """Constructs a ResNet-18 model.
     Args:
@@ -368,7 +315,17 @@ def resnet18(pretrained=False, progress=True, device="cpu", **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _resnet(
-        "resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, device, with_dropout = False, **kwargs
+        "resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, False, device, **kwargs
+    )
+
+def resnet18_with_mutation(pretrained=False, progress=True, device="cpu", **kwargs):
+    """Constructs a ResNet-18 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet(
+        "resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, True, device, **kwargs
     )
 
 
@@ -392,44 +349,3 @@ def resnet50(pretrained=False, progress=True, device="cpu", **kwargs):
     return _resnet(
         "resnet50", Bottleneck, [3, 4, 6, 3], pretrained, progress, device, **kwargs
     )
-
-class dropout_residual(nn.Module):
-  def __init__(self, input_channels, num_channels, dropout_rate, dropout_type, init_dict, use_1x1conv=False, strides=1, **kwargs):
-    super().__init__(**kwargs)
-    self.conv1 = Dropout_Conv2D(input_channels, num_channels, kernel_size=3, padding=1, stride=strides, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict)
-    self.conv2 = Dropout_Conv2D(num_channels, num_channels, kernel_size=3, padding=1, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict)
-
-    if use_1x1conv:
-      self.conv3 = Dropout_Conv2D(input_channels, num_channels, kernel_size=1, stride=strides, dropout_rate=dropout_rate, dropout_type=dropout_type)
-    else:
-      self.conv3 = None
-    
-    self.bn1 = nn.BatchNorm2d(num_channels)
-    self.bn2 = nn.BatchNorm2d(num_channels)
-
-def dropout_resnet_block(input_channels, num_channels, num_residuals, dropout_rate, dropout_type, init_dict, first_block=False):
-  blk = []
-  for i in range(num_residuals):
-    if i == 0 and not first_block:
-      blk.append(dropout_residual(input_channels, num_channels, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict, use_1x1conv=True, strides=2))
-    else:
-      blk.append(dropout_residual(num_channels, num_channels, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
-  return blk
-
-def dropout_resnet18(dropout_rate=dropout_rate, dropout_type="w", init_dict=dict()):
-  b1 = nn.Sequential(
-      Dropout_Conv2D(1, 64, kernel_size=7, stride=2, padding=3, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict),
-      nn.BatchNorm2d(64),
-      nn.ReLU(),
-      nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-    )
-  b2 = nn.Sequential(*dropout_resnet_block(64, 64, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict, first_block=True))
-  b3 = nn.Sequential(*dropout_resnet_block(64, 128, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
-  b4 = nn.Sequential(*dropout_resnet_block(128, 256, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
-  b5 = nn.Sequential(*dropout_resnet_block(256, 512, 2, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
-
-  return nn.Sequential(b1, b2, b3, b4, b5,
-                       nn.AdaptiveAvgPool2d((1,1)),
-                       nn.Flatten(),
-                       Dropout_Linear(512, 20, dropout_rate=dropout_rate, dropout_type=dropout_type, init_dict=init_dict))
-

@@ -49,22 +49,25 @@ class CIFAR10Data(pl.LightningDataModule):
         )
         dataset = CIFAR10(root=self.hparams.data_dir, train=True, transform=transform, download=True)
         targets = np.array(dataset.targets)
-        targets_class_indicates = []
-        for i in range(len(targets)):
-            if targets[i] == self.hparams.adversary_class:
-                targets_class_indicates.append(i)
+        # create noise labels
+        # noise_rate = self.hparams.noise_rate
+        # noise_type = self.hparams.noise_type
+        # train_noisy_labels, actual_noise_rate = noisify(nb_classes=10, train_labels=targets, noise_type=noise_type, noise_rate=noise_rate, random_state=0)
+        # print("Actual noise rate:\t{:.2f}".format(actual_noise_rate))
 
+        # with open(os.path.join(self.path, "clean_label.json"), 'w') as f:
+        #     json.dump(targets.tolist(), f)
+        # with open(os.path.join(self.path, "noisy_label.json"), 'w') as f:
+        #     json.dump(train_noisy_labels.tolist(), f)
         adversary_rate = self.hparams.adversary_rate
-        print("Actual adversayr rate:\t{:.2f}".format(adversary_rate))
-        targets_class_indicates = np.array(targets_class_indicates)
+        print("Actual aadversayr rate:\t{:.2f}".format(adversary_rate))
+
         # create adversary sample
-        num_samples = targets_class_indicates.shape[0]
-        
+        num_samples = targets.shape[0]
         num_attacks = int(self.hparams.adversary_rate * num_samples)
-        # attack_indicates = random.sample(range(num_samples), num_attacks)
-        attack_indicates = np.random.choice(targets_class_indicates, num_attacks,replace=False)
+        attack_indicates = random.sample(range(num_samples), num_attacks)
         with open(os.path.join(self.path, "attack_indicates.json"), 'w') as f:
-            json.dump(attack_indicates.tolist(), f)
+            json.dump(attack_indicates, f)
 
         # dataset.targets = train_noisy_labels.tolist()
 
@@ -103,6 +106,11 @@ class CIFAR10Data(pl.LightningDataModule):
                 perturbed_data = perturbed_data.permute(1, 2, 0)
                 dataset.data[i] = perturbed_data
                 
+               
+
+
+
+
 
         self.noisy_trainset = dataset
 

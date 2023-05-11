@@ -9,8 +9,10 @@ from cifar10_models.inception import inception_v3
 from cifar10_models.mobilenetv2 import mobilenet_v2
 from cifar10_models.resnet import resnet18, resnet34, resnet50
 from cifar10_models.resnet_with_dropout import resnet18_with_dropout
+from cifar10_models.resnet_with_mutation import resnet18_with_mutation
 from cifar10_models.vgg import vgg11_bn, vgg13_bn, vgg16_bn, vgg19_bn
 from schduler import WarmupCosineLR
+import random  # Import the random library
 
 
 all_classifiers = {
@@ -27,9 +29,22 @@ all_classifiers = {
     "mobilenet_v2": mobilenet_v2(),
     "googlenet": googlenet(),
     "inception_v3": inception_v3(),
-    "resnet18_with_dropout": resnet18_with_dropout()
+    "resnet18_with_dropout": resnet18_with_dropout(),
+    "resnet18_with_mutation": resnet18_with_mutation()
 }
 
+def neuron_mutation(model, mutation_rate=0.01):
+    print(mutation_rate)
+    for param in model.parameters():
+        tensor_shape = param.data.size()
+        num_elements = param.data.numel()
+        mutation_indices = random.sample(range(num_elements), int(mutation_rate * num_elements))
+
+    for idx in mutation_indices:
+        indices = torch.tensor(idx).view(1, -1)
+        flat_data = param.data.view(-1)
+        flat_data.index_add_(0, indices, torch.randn_like(flat_data[indices]))
+        param.data = flat_data.view(tensor_shape)
 
 class CIFAR10Module(pl.LightningModule):
     def __init__(self, hparams):
@@ -46,7 +61,6 @@ class CIFAR10Module(pl.LightningModule):
         self.model = all_classifiers[self.hparams.classifier]
 
 
-
     def forward(self, batch):
         images, labels = batch
         predictions = self.model(images)
@@ -60,8 +74,11 @@ class CIFAR10Module(pl.LightningModule):
        
         images, labels = batch
         loss, accuracy = self.forward((images, labels))
-
-
+        
+        if self.hparams.add_mutation:
+            print("add neuron mutation,mutation rate:{}".format(self.hparams.mutation_rate))
+            # Apply neuron mutation
+            neuron_mutation(self.model, mutation_rate=self.hparams.mutation_rate)
         self.log("loss/train", loss)
         self.log("acc/train", accuracy)
             

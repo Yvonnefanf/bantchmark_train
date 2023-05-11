@@ -6,13 +6,13 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
-from noisy_data import CIFAR10Data
+from adversary_data_for_one_class import CIFAR10Data
 from module import CIFAR10Module
 
 
 def main(args):
 
-    content_path = os.path.join(args.filepath, "experiment3", )
+    content_path = os.path.join(args.filepath,"experiment1")
     os.makedirs(content_path, exist_ok=True)
 
     if bool(args.download_weights):
@@ -46,12 +46,11 @@ def main(args):
             max_epochs=args.max_epochs,
             checkpoint_callback=checkpoint,
             precision=args.precision,
-
         )
 
         model = CIFAR10Module(args)
 
-        data = CIFAR10Data(args, content_path)
+        data = CIFAR10Data(args, content_path, model)
         data.save_train_data()
         data.save_test_data()
 
@@ -81,32 +80,25 @@ if __name__ == "__main__":
     )
 
     # TRAINER args
-    parser.add_argument("--classifier", type=str, default="resnet18_with_mutation")
-    # parser.add_argument("--classifier", type=str, default="resnet18")
+    parser.add_argument("--classifier", type=str, default="resnet18")
     parser.add_argument("--pretrained", type=int, default=0, choices=[0, 1])
-    parser.add_argument("--dropout_rate", type=float, default=0.5)
 
     parser.add_argument("--precision", type=int, default=32, choices=[16, 32])
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--max_epochs", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=2)
-    parser.add_argument("--gpu_id", type=str, default="1")
+    parser.add_argument("--gpu_id", type=str, default="0")
 
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
 
-    parser.add_argument("--filepath", type=str, default="/home/yifan/Exp/Mutation/drop_channel/0.4")
-    parser.add_argument("--period", type=int, default=20)
+    parser.add_argument("--filepath", type=str, default="/home/yifan/experiments/adversary_for_one_class/20")
+    parser.add_argument("--adversary_class", type=int, default=1)
+    parser.add_argument("--period", type=int, default=1)
     parser.add_argument("--save_top_k", type=int, default=-1)
     parser.add_argument("--need_adv", type=bool, default=True)
 
-    parser.add_argument("--noise_type", type=str, choices=["symmetric", "pairflip"], default="pairflip")
-    parser.add_argument("--remove_data_augmentation", type=bool, default=False)
-
-    parser.add_argument("--add_mutation", type=bool, default=False)
-    parser.add_argument("--mutation_rate", type=float, default=0.5)
-
-    parser.add_argument("--noise_rate", type=float, default=0.0)
+    parser.add_argument("--adversary_rate",type=float, default=0.2)
     parser.add_argument("--optimizer", type=str, default="SGD-M")
 
     args = parser.parse_args()
